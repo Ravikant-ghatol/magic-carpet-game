@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>MAGIC CARPET: THE GENIE CHASE</title>
+<style>
+*{box-sizing:border-box;user-select:none;-webkit-user-select:none;touch-action:none}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#050510;font-family:Segoe UI,Arial,sans-serif}
+canvas{display:block;width:100%;height:100%}
+#ui{position:fixed;inset:0;padding:18px;pointer-events:none;display:flex;flex-direction:column;justify-content:space-between}
+.row{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.box{background:#0f0a1eaa;border:2px solid #ffd700;border-radius:12px;padding:9px 14px;color:#fff;font-weight:bold;text-shadow:0 0 8px #ffd700;backdrop-filter:blur(5px)}
+#bar{width:30%;min-width:170px;height:20px;border:2px solid #00f0ff;border-radius:10px;overflow:hidden;position:relative;background:#0009}
+#fill{height:100%;width:70%;background:linear-gradient(90deg,#f05,#fd0,#0ff)}
+#bar span{position:absolute;inset:1px;text-align:center;font-size:10px;color:#fff}
+#bottom{display:flex;align-items:end;justify-content:space-between}
+#joy{width:120px;height:120px;border-radius:50%;border:2px solid #00f0ff88;background:#00f0ff22;pointer-events:auto;position:relative;box-shadow:0 0 18px #00f0ff55}
+#knob{position:absolute;width:50px;height:50px;left:33px;top:33px;border-radius:50%;background:radial-gradient(circle,#ffd700,#f80);border:2px solid #fff;box-shadow:0 0 12px #ffd700}
+#magic{width:70px;height:70px;border-radius:50%;border:3px solid #fff;background:radial-gradient(circle,#0ff,#04f);box-shadow:0 0 25px #0ff;color:#fff;font-size:28px;pointer-events:auto}
+.overlay{position:fixed;inset:0;z-index:20;background:#050510dd;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;color:#fff;backdrop-filter:blur(7px)}
+.hidden{display:none!important}
+h1{font:3rem Georgia,serif;color:#ffd700;text-shadow:0 0 20px #f05,0 0 40px #fd0;margin:0 0 8px}
+.sub{color:#0ff;font-size:1.2rem;text-shadow:0 0 10px #0ff;margin-bottom:25px}
+button{border:0;border-radius:30px;padding:15px 40px;background:linear-gradient(45deg,#f05,#fa0);color:#fff;font-size:18px;font-weight:bold;box-shadow:0 0 20px #f058}
+#dialog{position:fixed;left:50%;bottom:125px;transform:translateX(-50%);width:80%;max-width:600px;background:#0a0f28ee;border:2px solid #0ff;border-radius:15px;padding:12px;color:#fff;display:flex;gap:12px;align-items:center;pointer-events:none}
+#avatar{width:50px;height:50px;border-radius:50%;background:radial-gradient(circle,#0ff,#028);display:flex;align-items:center;justify-content:center;font-size:25px;flex:none}
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<div id="ui">
+  <div class="row">
+    <div class="box" id="score">SCORE: 00000</div>
+    <div id="bar"><div id="fill"></div><span>RAKHMAR DISTANCE</span></div>
+    <div class="box" id="hp">❤️❤️❤️</div>
+  </div>
+  <div class="row" style="align-items:end">
+    <div id="dialog" class="hidden"><div id="avatar">🧞‍♂️</div><div id="dialogText"></div></div>
+  </div>
+  <div id="bottom">
+    <div id="joy"><div id="knob"></div></div>
+    <div class="box" id="loot">🪙 0 | 💎 0</div>
+    <button id="magic">⚡</button>
+  </div>
+</div>
+
+<div id="menu" class="overlay">
+  <h1>MAGIC CARPET</h1><div class="sub">THE GENIE CHASE</div>
+  <button id="start">BEGIN ADVENTURE</button>
+  <p style="color:#aaa">Joystick / Arrow Keys to Move<br>⚡ Magic Button / Spacebar for Genie Blast</p>
+</div>
+<div id="over" class="overlay hidden">
+  <h1 style="color:#f05;text-shadow:0 0 20px #f05">THE CHASE IS OVER</h1>
+  <div class="sub" id="stats" style="color:#fff"></div>
+  <button id="retry">RETRY ESCAPE</button>
+</div>
+
+<script>
+const C=document.getElementById('game'),ctx=C.getContext('2d');let W,H;
+function resize(){W=C.width=innerWidth;H=C.height=innerHeight}addEventListener('resize',resize);resize();
+
+let state=0,cam=0,time=0,score=0,coins=0,gems=0,hp=3,dist=70,px=0,py=0,tx=0,ty=0,shield=0;
+let objs=[],parts=[],fire=[],bob=0;
+const keys={};
+addEventListener('keydown',e=>{keys[e.code]=true;if(e.code==='Space')magic()});
+addEventListener('keyup',e=>keys[e.code]=false);
+
+const joy=document.getElementById('joy'),knob=document.getElementById('knob');
+let joyOn=false,jx=0,jy=0;
+function joyMove(x,y){let r=joy.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2,dx=x-cx,dy=y-cy,d=Math.hypot(dx,dy),m=40;if(d>m){dx=dx/d*m;dy=dy/d*m}jx=dx/m;jy=dy/m;knob.style.transform=`translate(${dx}px,${dy}px)`}
+joy.addEventListener('pointerdown',e=>{joyOn=true;joy.setPointerCapture(e.pointerId);joyMove(e.clientX,e.clientY)});
+joy.addEventListener('pointermove',e=>{if(joyOn)joyMove(e.clientX,e.clientY)});
+joy.addEventListener('pointerup',()=>{joyOn=false;jx=jy=0;knob.style.transform='translate(0,0)'});
+joy.addEventListener('pointercancel',()=>{joyOn=false;jx=jy=0;knob.style.transform='translate(0,0)'});
+
+function beep(freq,dur,type='sine'){try{let a=new AudioContext(),o=a.createOscillator(),g=a.createGain();o.type=type;o.frequency.value=freq;g.gain.value=.12;o.connect(g);g.connect(a.destination);o.start();g.gain.exponentialRampToValueAtTime(.001,a.currentTime+dur);o.stop(a.currentTime+dur)}catch(e){}}
+function say(s,n=120){dialogText.textContent=s;dialog.classList.remove('hidden');setTimeout(()=>dialog.classList.add('hidden'),n*16)}
+function spawn(z){let r=Math.random(),type=r<.34?'arch':r<.48?'tower':r<.82?'coin':r<.94?'gem':'lamp';objs.push({type,x:(Math.random()-.5)*800,y:type==='arch'?100:(Math.random()-.5)*280,z,hit:false})}
+function init(){objs=[];parts=[];fire=[];for(let z=500;z<5500;z+=150)spawn(z)}
+function start(){state=1;cam=time=score=coins=gems=0;hp=3;dist=70;px=py=tx=ty=0;shield=0;menu.classList.add('hidden');over.classList.add('hidden');init();say('Zafir: Escape Rakhmar! Use Magic if he gets too close!',180)}
+function magic(){if(state!==1)return;shield=300;dist=Math.min(100,dist+25);beep(700,.35,'triangle');for(let i=0;i<35;i++)parts.push({x:px,y:py,z:cam+60,vx:(Math.random()-.5)*20,vy:(Math.random()-.5)*20,l:35});say('Zafir: GENIE BLAST! Rakhmar is pushed back!',120)}
+startBtn.onclick=start;retry.onclick=start;magic.onclick=magic;
+
+function update(){
+ if(state!==1)return;time++;cam+=40;score+=4;dist-=.045;if(shield)shield--;
+ let mx=(keys.ArrowLeft||keys.KeyA?-1:0)+(keys.ArrowRight||keys.KeyD?1:0);
+ let my=(keys.ArrowUp||keys.KeyW?1:0)+(keys.ArrowDown||keys.KeyS?-1:0);
+ if(joyOn){mx=jx;my=-jy}
+ tx+=mx*14;ty+=my*12;tx=Math.max(-400,Math.min(400,tx));ty=Math.max(-200,Math.min(250,ty));
+ px+=(tx-px)*.15;py+=(ty-py)*.15;
+ for(let o of objs){if(!o.hit&&Math.abs(o.z-(cam+100))<65&&Math.abs(o.x-px)<70&&Math.abs(o.y-py)<80){o.hit=true;if(o.type==='coin'){coins++;beep(1000,.12)}else if(o.type==='gem'){gems++;beep(1400,.15)}else if(o.type==='lamp'){magic()}else{if(shield){beep(180,.15,'sawtooth')}else{hp--;dist-=18;beep(120,.25,'sawtooth')}}}}
+ let max=0;for(let o of objs){max=Math.max(max,o.z);if(o.z<cam-250){o.z=max+150;o.x=(Math.random()-.5)*800;o.y=(Math.random()-.5)*300;o.hit=false}}
+ if(time%55===0)fire.push({x:(Math.random()-.5)*1100,y:180+Math.random()*300,z:cam+1800,r:1,max:40+Math.random()*55,h:`hsl(${Math.random()*360},100%,60%)`});
+ if(dist<=0||hp<=0)gameOver();
+ scoreEl.textContent='SCORE: '+String(score).padStart(5,'0');loot.textContent=`🪙 ${coins} | 💎 ${gems}`;hpEl.textContent='❤️'.repeat(Math.max(0,hp));fill.style.width=Math.max(0,Math.min(100,dist))+'%';
+}
+function project(o){let z=o.z-cam;if(z<1)z=1;let s=300/z;return{x:W/2+(o.x-px*.3)*s,y:H/2-(o.y-py*.3)*s,s}}
+function gameOver(){state=2;stats.innerHTML=`Final Score: ${score}<br>Coins: 🪙 ${coins}<br>Gems: 💎 ${gems}`;over.classList.remove('hidden')}
+
+function render(){
+ let g=ctx.createLinearGradient(0,0,0,H);g.addColorStop(0,'#020008');g.addColorStop(.5,'#0d0826');g.addColorStop(1,'#1a0b36');ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+ let hy=H/2+py*.1;g=ctx.createLinearGradient(0,hy,0,H);g.addColorStop(0,'#051833');g.addColorStop(1,'#020b18');ctx.fillStyle=g;ctx.fillRect(0,hy,W,H-hy);
+ for(let i=0;i<fire.length;i++){let f=fire[i],p=project(f);f.r+=1.5;ctx.beginPath();ctx.arc(p.x,p.y,f.r*p.s,0,7);ctx.strokeStyle=f.h;ctx.lineWidth=3*p.s;ctx.stroke();if(f.r>f.max){fire.splice(i--,1)}}
+ let list=objs.filter(o=>o.z>cam&&o.z<cam+3500&&!o.hit).sort((a,b)=>b.z-a.z);
+ for(let o of list){let p=project(o);ctx.save();ctx.translate(p.x,p.y);let s=p.s;
+ if(o.type==='coin'){ctx.fillStyle='#ffd700';ctx.shadowColor='#ffd700';ctx.shadowBlur=12;ctx.beginPath();ctx.arc(0,0,18*s,0,7);ctx.fill()}
+ else if(o.type==='gem'){ctx.fillStyle='#0ff';ctx.shadowColor='#0ff';ctx.shadowBlur=15;ctx.beginPath();ctx.moveTo(0,-22*s);ctx.lineTo(20*s,0);ctx.lineTo(0,22*s);ctx.lineTo(-20*s,0);ctx.fill()}
+ else if(o.type==='lamp'){ctx.fillStyle='#fa0';ctx.fillRect(-15*s,-10*s,30*s,20*s)}
+ else if(o.type==='arch'){ctx.fillStyle='#3a2050';ctx.strokeStyle='#f05';ctx.lineWidth=4*s;ctx.fillRect(-150*s,-125*s,300*s,250*s);ctx.strokeRect(-150*s,-125*s,300*s,250*s)}
+ else{ctx.fillStyle='#221033';ctx.fillRect(-50*s,-500*s,100*s,500*s)}
+ ctx.restore()}
+ if(state===1){
+  let mz=cam+dist*15+80,mp=project({x:px*.8,y:py*.8+80,z:mz}),s=180*mp.s;ctx.save();ctx.translate(mp.x,mp.y);
+  ctx.fillStyle='#f05';ctx.globalAlpha=.2;ctx.beginPath();ctx.arc(0,0,s*.9,0,7);ctx.fill();ctx.globalAlpha=1;
+  ctx.fillStyle='#181024';ctx.strokeStyle='#f05';ctx.lineWidth=4;ctx.beginPath();ctx.arc(0,-s*.2,s*.6,0,7);ctx.fill();ctx.stroke();
+  ctx.fillStyle='#f05';ctx.shadowColor='#f05';ctx.shadowBlur=20;ctx.beginPath();ctx.arc(-s*.22,-s*.3,s*.1,0,7);ctx.arc(s*.22,-s*.3,s*.1,0,7);ctx.fill();ctx.shadowBlur=0;ctx.restore();
+  ctx.save();ctx.translate(W/2,H/2+120);ctx.rotate((tx-px)*-.003);
+  if(shield){ctx.strokeStyle='#0ff';ctx.lineWidth=4;ctx.shadowColor='#0ff';ctx.shadowBlur=20;ctx.beginPath();ctx.arc(0,-30,90,0,7);ctx.stroke();ctx.shadowBlur=0}
+  ctx.fillStyle='#903';ctx.strokeStyle='#ffd700';ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(-70,20);ctx.quadraticCurveTo(0,35,70,20);ctx.quadraticCurveTo(80,-10,60,-20);ctx.quadraticCurveTo(0,-10,-60,-20);ctx.quadraticCurveTo(-80,-10,-70,20);ctx.fill();ctx.stroke();
+  ctx.fillStyle='#e0a070';ctx.beginPath();ctx.arc(0,-45,16,0,7);ctx.fill();ctx.fillStyle='#111';ctx.beginPath();ctx.arc(0,-49,17,Math.PI*.8,Math.PI*2.2);ctx.fill();ctx.fillStyle='#08c';ctx.fillRect(-14,-25,28,26);
+  bob+=.08;let gx=70+Math.sin(bob)*10,gy=-50+Math.cos(bob)*10;ctx.fillStyle='#0ff';ctx.shadowColor='#0ff';ctx.shadowBlur=15;ctx.beginPath();ctx.arc(gx,gy,20,0,7);ctx.fill();ctx.shadowBlur=0;ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(gx-7,gy-4,5,0,7);ctx.arc(gx+7,gy-4,5,0,7);ctx.fill();ctx.restore();
+ }
+ for(let i=parts.length-1;i>=0;i--){let p=parts[i];p.x+=p.vx;p.y+=p.vy;p.z+=-5;p.l--;let q=project({x:p.x,y:p.y,z:p.z});ctx.fillStyle='#0ff';ctx.fillRect(q.x,q.y,5*q.s,5*q.s);if(p.l<=0)parts.splice(i,1)}
+}
+function loop(){update();render();requestAnimationFrame(loop)}loop();
+const scoreEl=document.getElementById('score'),hpEl=document.getElementById('hp'),loot=document.getElementById('loot'),fill=document.getElementById('fill'),menu=document.getElementById('menu'),over=document.getElementById('over'),stats=document.getElementById('stats'),startBtn=document.getElementById('start'),retry=document.getElementById('retry'),dialog=document.getElementById('dialog'),dialogText=document.getElementById('dialogText');
+</script>
+</body>
+</html>
